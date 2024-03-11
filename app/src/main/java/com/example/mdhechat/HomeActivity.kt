@@ -2,10 +2,12 @@
 
 package com.example.mdhechat
 
+import android.annotation.SuppressLint
 import android.content.res.Configuration
 import android.graphics.drawable.VectorDrawable
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -46,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -110,6 +113,10 @@ fun MyApp() {
 
 enum class Tabs(val icon: ImageVector, val title: String) {
     Home(Icons.Filled.Home, "Home"), Add(Icons.Filled.Add, "Add Friends"),
+    Share(
+        Icons.Filled.Share,
+        "Share"
+    )
 }
 
 
@@ -234,9 +241,9 @@ fun BottomBar(activeScreen: Tabs, tabChanger: (Tabs) -> Unit) {
 }
 
 
+@SuppressLint("RestrictedApi")
 @Composable
 fun CurrentChats() {
-    var presses by remember { mutableStateOf(0) }
     var chatPreviews by remember {
         mutableStateOf(
             listOf(
@@ -257,18 +264,69 @@ fun CurrentChats() {
             )
         )
     }
+    val customBackStack = ArrayDeque<Tabs>(listOf(Tabs.Home))
     var activeScreen by remember {
         mutableStateOf(Tabs.Home)
     }
     val navController = rememberNavController()
-    val customBackStack = ArrayDeque<Tabs>()
 
+//    var prevStackSize by remember {
+//        mutableIntStateOf(1)
+//    }
+    var initBackStackSize = 2
+    var prevStackSize by remember {
+        initBackStackSize = navController.currentBackStack.value.size
+        mutableIntStateOf(initBackStackSize)
+    }
     NavHost(navController = navController, startDestination = Tabs.Home.toString()) {
         Tabs.entries.forEach { tab ->
             composable(tab.toString()) {
                 LaunchedEffect(key1 = null, block = {
-                    customBackStack.removeFirst()
-                    activeScreen = tab
+                    val backStack = navController.currentBackStack.value
+//                    if (!customBackStack.isEmpty() && customBackStack.first() == Tabs.Home) {
+//                        backStack.dropLastWhile {
+//                            backStack.size != 2
+//                        }
+//                    }
+//                    if (!customBackStack.isEmpty()) {
+//                        activeScreen = if (customBackStack.size > prevStackSize) {
+//                            tab
+//                        } else {
+//                            Tabs.Home
+//                        }
+//                    }
+//                    if (customBackStack.size > 2) {
+//                        customBackStack.removeAt(1)
+//                    }
+//                    prevStackSize = customBackStack.size
+//                    if (tab == Tabs.Home) {
+//                        backStack.dropLastWhile {
+//                            backStack.size != initBackStackSize
+//                        }
+//                    }
+
+//                    if (tab == Tabs.Home) {
+//                        while(backStack.size != 2){
+//                            backStack.last
+//                        }
+//                    }
+
+                    activeScreen = if (backStack.size > prevStackSize) {
+                        tab
+                    } else {
+                        while (backStack.size != 2) {
+//                            backStack.dropLast(1)
+//                            navController.clearBackStack("")
+                            navController.popBackStack(Tabs.Home.toString(),true)
+                        }
+
+                        Tabs.Home
+                    }
+                    if (backStack.size > 4) {
+                        backStack.drop(3)
+                    }
+                    prevStackSize = backStack.size
+
                 })
             }
         }
@@ -277,14 +335,11 @@ fun CurrentChats() {
     Scaffold(topBar = {
         TopBar(title = "Chats")
     }, bottomBar = {
-
-        BottomBar(
-            activeScreen = activeScreen,
-            tabChanger = {
-                activeScreen = it
-                navController.navigate(it.toString())
-                customBackStack.addLast(it)
-            })
+        BottomBar(activeScreen = activeScreen, tabChanger = {
+//            activeScreen = it
+            customBackStack.addFirst(it)
+            navController.navigate(it.toString())
+        })
 
     }) { innerPadding ->
 
@@ -297,6 +352,10 @@ fun CurrentChats() {
 
                 Tabs.Add -> {
                     Text(color = Color.Green, text = "Add Friends")
+                }
+
+                Tabs.Share -> {
+                    Text(text = "Share", color = Color.Green)
                 }
             }
 
