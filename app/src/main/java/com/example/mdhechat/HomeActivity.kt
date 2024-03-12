@@ -3,11 +3,15 @@
 package com.example.mdhechat
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.res.Configuration
 import android.graphics.drawable.VectorDrawable
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.OnBackPressedDispatcher
+import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -47,6 +51,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -57,6 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -66,6 +72,8 @@ import androidx.navigation.compose.rememberNavController
 
 import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.NavController
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.mdhechat.ui.theme.MdheChatTheme
 import java.util.Deque
 
@@ -73,6 +81,8 @@ import java.util.Deque
 class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+
         setContent {
             MdheChatTheme {
                 MainView()
@@ -112,8 +122,7 @@ fun MyApp() {
 
 
 enum class Tabs(val icon: ImageVector, val title: String) {
-    Home(Icons.Filled.Home, "Home"), Add(Icons.Filled.Add, "Add Friends"),
-    Share(
+    Home(Icons.Filled.Home, "Home"), Add(Icons.Filled.Add, "Add Friends"), Share(
         Icons.Filled.Share,
         "Share"
     )
@@ -253,81 +262,37 @@ fun CurrentChats() {
                 ChatThumbnail("java", "java is fun"),
                 ChatThumbnail("java", "java is fun"),
                 ChatThumbnail("java", "java is fun"),
-                ChatThumbnail("java", "java is fun"),
-                ChatThumbnail("java", "java is fun"),
-                ChatThumbnail("java", "java is fun"),
-                ChatThumbnail("java", "java is fun"),
-                ChatThumbnail("java", "java is fun"),
-                ChatThumbnail("java", "java is fun"),
-                ChatThumbnail("java", "java is fun"),
-                ChatThumbnail("java", "java is fun"),
             )
         )
     }
-    val customBackStack = ArrayDeque<Tabs>(listOf(Tabs.Home))
     var activeScreen by remember {
         mutableStateOf(Tabs.Home)
     }
     val navController = rememberNavController()
-
-//    var prevStackSize by remember {
-//        mutableIntStateOf(1)
-//    }
-    var initBackStackSize = 2
-    var prevStackSize by remember {
-        initBackStackSize = navController.currentBackStack.value.size
-        mutableIntStateOf(initBackStackSize)
+    navController.setLifecycleOwner(LocalLifecycleOwner.current)
+    SideEffect {
+        navController.enableOnBackPressed(true)
+        val dispatcher = OnBackPressedDispatcher {}
+        val callback = object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val currentRoute = navController.currentBackStackEntry?.destination?.route
+                if (currentRoute != null) {
+                    Log.v("RT", currentRoute)
+                } else {
+                    Log.v("RT", "null")
+                }
+            }
+        }
+        dispatcher.addCallback(callback)
+        navController.setOnBackPressedDispatcher(dispatcher)
     }
+
+
     NavHost(navController = navController, startDestination = Tabs.Home.toString()) {
+
         Tabs.entries.forEach { tab ->
             composable(tab.toString()) {
-                LaunchedEffect(key1 = null, block = {
-                    val backStack = navController.currentBackStack.value
-//                    if (!customBackStack.isEmpty() && customBackStack.first() == Tabs.Home) {
-//                        backStack.dropLastWhile {
-//                            backStack.size != 2
-//                        }
-//                    }
-//                    if (!customBackStack.isEmpty()) {
-//                        activeScreen = if (customBackStack.size > prevStackSize) {
-//                            tab
-//                        } else {
-//                            Tabs.Home
-//                        }
-//                    }
-//                    if (customBackStack.size > 2) {
-//                        customBackStack.removeAt(1)
-//                    }
-//                    prevStackSize = customBackStack.size
-//                    if (tab == Tabs.Home) {
-//                        backStack.dropLastWhile {
-//                            backStack.size != initBackStackSize
-//                        }
-//                    }
-
-//                    if (tab == Tabs.Home) {
-//                        while(backStack.size != 2){
-//                            backStack.last
-//                        }
-//                    }
-
-                    activeScreen = if (backStack.size > prevStackSize) {
-                        tab
-                    } else {
-                        while (backStack.size != 2) {
-//                            backStack.dropLast(1)
-//                            navController.clearBackStack("")
-                            navController.popBackStack(Tabs.Home.toString(),true)
-                        }
-
-                        Tabs.Home
-                    }
-                    if (backStack.size > 4) {
-                        backStack.drop(3)
-                    }
-                    prevStackSize = backStack.size
-
-                })
+                activeScreen = tab
             }
         }
     }
@@ -336,8 +301,6 @@ fun CurrentChats() {
         TopBar(title = "Chats")
     }, bottomBar = {
         BottomBar(activeScreen = activeScreen, tabChanger = {
-//            activeScreen = it
-            customBackStack.addFirst(it)
             navController.navigate(it.toString())
         })
 
