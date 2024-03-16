@@ -2,68 +2,51 @@
 
 package com.example.mdhechat
 
-import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.res.Configuration
-import android.graphics.drawable.VectorDrawable
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
-import androidx.activity.OnBackPressedCallback
-import androidx.activity.OnBackPressedDispatcher
-import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButtonColors
-import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedIconButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.CombinedModifier
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalLifecycleOwner
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
@@ -71,18 +54,28 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 
 import androidx.compose.ui.text.font.FontWeight
-import androidx.navigation.NavController
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.compose.ui.text.input.ImeAction
+import com.example.mdhechat.helpers.Request
+import com.example.mdhechat.helpers.RequstState
 import com.example.mdhechat.ui.theme.MdheChatTheme
-import java.util.Deque
+import com.example.mdhechat.uiHelpers.Direction
+import com.example.mdhechat.uiHelpers.Spaced
+import io.ktor.client.call.body
+import io.ktor.client.request.get
+import io.ktor.client.request.parameter
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.URLProtocol
+import io.ktor.http.contentType
+import io.ktor.http.path
+import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 
 class HomeActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-
         setContent {
             MdheChatTheme {
                 MainView()
@@ -136,14 +129,14 @@ fun MainView() {
 }
 
 @Composable
-fun TopBar(title: String) {
+fun TopBar(comp: @Composable () -> Unit) {
     Row(
         modifier = Modifier
             .background(color = MaterialTheme.colorScheme.primaryContainer)
             .fillMaxWidth()
             .padding(8.dp, 4.dp)
     ) {
-        Text(title, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+        comp()
     }
 }
 
@@ -179,9 +172,6 @@ fun ChatThumbnailRenderer(thumbnail: ChatThumbnail) {
 @Composable
 fun AllThumbnailRenderer(thumbnails: List<ChatThumbnail>) {
     val scrollState = rememberScrollState()
-    var interactionSource = remember {
-        MutableInteractionSource()
-    }
     Surface {
         Column(
             modifier = Modifier
@@ -230,16 +220,13 @@ fun BottomBar(activeScreen: Tabs, tabChanger: (Tabs) -> Unit) {
             OutlinedButton(
                 onClick = {
                     tabChanger(it)
-//                    navController.navigate(it.toString());
                 },
                 modifier = if (activeScreen == it) {
                     selectedModifier
                 } else {
                     unSelectedModifier
                 },
-
-
-                ) {
+            ) {
                 Icon(imageVector = it.icon, contentDescription = it.name)
             }
             Spacer(modifier = Modifier.width(5.dp))
@@ -250,7 +237,6 @@ fun BottomBar(activeScreen: Tabs, tabChanger: (Tabs) -> Unit) {
 }
 
 
-@SuppressLint("RestrictedApi")
 @Composable
 fun CurrentChats() {
     var chatPreviews by remember {
@@ -269,27 +255,43 @@ fun CurrentChats() {
         mutableStateOf(Tabs.Home)
     }
     val navController = rememberNavController()
-    navController.setLifecycleOwner(LocalLifecycleOwner.current)
-    SideEffect {
-        navController.enableOnBackPressed(true)
-        val dispatcher = OnBackPressedDispatcher {}
-        val callback = object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() {
-                val currentRoute = navController.currentBackStackEntry?.destination?.route
-                if (currentRoute != null) {
-                    Log.v("RT", currentRoute)
-                } else {
-                    Log.v("RT", "null")
+    val scope = rememberCoroutineScope()
+
+    var searchUsername by remember {
+        mutableStateOf("")
+    }
+
+    var searchResultUsers by remember {
+        mutableStateOf(listOf<User>())
+    }
+
+    val searchRequest by remember {
+        mutableStateOf(Request(onFailure = {
+            it.message?.let { it1 -> Log.e("SER", it1) }
+        }, requester = suspend {
+            val res = client.get {
+                url {
+                    protocol = URLProtocol.HTTP
+                    host = "192.168.1.86"
+                    port = 8080
+                    path("/search")
+                    parameter("username", searchUsername)
                 }
             }
-        }
-        dispatcher.addCallback(callback)
-        navController.setOnBackPressedDispatcher(dispatcher)
+            if (res.status == HttpStatusCode.OK) {
+                val resString = res.body<String>();
+                Json.decodeFromString<SearchResult>(resString)
+            } else {
+                SearchResult(false, listOf())
+            }
+        }, onSuccess = {
+            searchResultUsers = it.results
+        }))
     }
 
 
-    NavHost(navController = navController, startDestination = Tabs.Home.toString()) {
 
+    NavHost(navController = navController, startDestination = Tabs.Home.toString()) {
         Tabs.entries.forEach { tab ->
             composable(tab.toString()) {
                 activeScreen = tab
@@ -298,10 +300,41 @@ fun CurrentChats() {
     }
 
     Scaffold(topBar = {
-        TopBar(title = "Chats")
+        when (activeScreen) {
+            Tabs.Add -> {
+                TopBar {
+                    OutlinedTextField(
+                        value = searchUsername,
+                        onValueChange = { searchUsername = it },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = {
+                            scope.launch {
+                                searchRequest.execute()
+                            }
+                        })
+                    )
+                }
+            }
+
+            else -> {
+                TopBar {
+                    Text(
+                        "Chat",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }, bottomBar = {
         BottomBar(activeScreen = activeScreen, tabChanger = {
-            navController.navigate(it.toString())
+            if (activeScreen != it) {
+                navController.navigate(it.toString()) {
+                    popUpTo(Tabs.Home.toString())
+                }
+
+            }
         })
 
     }) { innerPadding ->
@@ -312,17 +345,75 @@ fun CurrentChats() {
                 Tabs.Home -> {
                     AllThumbnailRenderer(thumbnails = chatPreviews)
                 }
-
                 Tabs.Add -> {
-                    Text(color = Color.Green, text = "Add Friends")
+                    when (searchRequest.state) {
+                        RequstState.LOADING -> {
+                            Text("Loading")
+                        }
+                        RequstState.NONE -> {
+                            Text("Search For Users")
+                        }
+                        RequstState.FAILURE -> {
+                            Text("Error Occurred")
+                        }
+                        RequstState.SUCCESS -> {
+                            SearchResultRenderer(results = searchResultUsers) {}
+                        }
+                    }
                 }
 
                 Tabs.Share -> {
                     Text(text = "Share", color = Color.Green)
                 }
+
             }
 
         }
     }
-
 }
+
+
+@Composable
+fun SearchResultRenderer(results: List<User>, setScreen: (Tabs) -> Unit) {
+    Spaced(
+        direction = Direction.COL, gap = 5.dp, items = results, modifier = Modifier.padding(
+            PaddingValues(4.dp, 2.dp)
+        )
+    ) {
+        val interactionSource = remember {
+            MutableInteractionSource()
+        }
+        Surface(
+            onClick = {}, interactionSource = interactionSource
+        ) {
+            Row(
+                modifier = Modifier
+                    .background(
+                        MaterialTheme.colorScheme.inversePrimary, RoundedCornerShape(5.dp)
+                    )
+                    .fillMaxWidth()
+                    .padding(8.dp, 4.dp)
+            ) {
+                Text(
+                    it.username,
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.weight(0.8f)
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                IconButton(onClick = { /*TODO*/ }) {
+                    Icon(imageVector = Icons.Filled.Add, contentDescription = "Add Friend")
+                }
+            }
+        }
+    }
+}
+
+
+@Serializable
+data class User(val id: String, val username: String)
+
+@Serializable
+data class AuthUser(val id: String, val username: String, val password: String)
+
+@Serializable
+data class SearchResult(val success: Boolean, val results: List<User>)
