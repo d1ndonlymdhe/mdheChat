@@ -32,7 +32,6 @@ fun <ItemType> Spaced(
             }
 
         }
-
         Direction.ROW -> {
             Row(modifier = modifier) {
                 items.forEach {

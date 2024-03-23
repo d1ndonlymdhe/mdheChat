@@ -12,9 +12,9 @@ enum class RequstState {
 }
 
 class Request<ResponseType>(
+    private val onSuccess: suspend (res: ResponseType) -> Unit,
     private val onFailure: suspend (err: Exception) -> Unit = {},
     private val requester: suspend () -> ResponseType,
-    private val onSuccess: suspend (res: ResponseType) -> Unit
 ) {
     var state by mutableStateOf(RequstState.NONE)
     suspend fun execute() {
@@ -35,10 +35,6 @@ class Request<ResponseType>(
         if (state != RequstState.LOADING) {
             state = RequstState.NONE
         }
-    }
-
-    fun subscribe() {
-
     }
 
 }

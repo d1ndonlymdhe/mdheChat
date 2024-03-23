@@ -1,5 +1,6 @@
 package com.example.mdhechat
 
+
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -7,7 +8,6 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
@@ -27,20 +26,18 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -48,37 +45,37 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.datastore.core.DataStore
-import androidx.datastore.dataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
-
+import com.example.mdhechat.helpers.Request
+import com.example.mdhechat.helpers.RequstState
+import com.example.mdhechat.helpers.Response
+import com.example.mdhechat.helpers.getTokenFromStore
 import com.example.mdhechat.ui.theme.MdheChatTheme
-
-import io.ktor.client.*
+import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-//import io.ktor.client.engine.cio.*;
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.toList
-
+import io.ktor.serialization.kotlinx.json.*;
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import java.io.IOException
+import mainApp.HomeActivity
 
-var client = HttpClient() {
+var client = HttpClient {
     expectSuccess = false
+    install(ContentNegotiation) {
+        json()
+    }
 }
 
+
+const val server = "http://192.168.1.86:8080"
 
 enum class ActiveScreen {
     SIGNUP, LOGIN
@@ -86,8 +83,6 @@ enum class ActiveScreen {
 
 // At the top level of your kotlin file:
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "auth")
-
-
 
 class LoginActivity : ComponentActivity() {
 
@@ -101,34 +96,16 @@ class LoginActivity : ComponentActivity() {
     }
 }
 
-
-
-suspend fun checkAuth(dataStore: DataStore<Preferences>,runner: ()->Unit){
-    val username_key = stringPreferencesKey("username")
-    val login_status_key = booleanPreferencesKey("login_status")
-    var x = false
-    dataStore.data.map { preferences ->
-        val username  = preferences[username_key]
-        val login_status = preferences[login_status_key]
-        (username != null && login_status != null) && login_status
-    }.collect{ value ->
-        if(value){
-            runner();
-        }
-    }
-}
-
 @Composable
 fun MainScreen() {
-
-    val scope = rememberCoroutineScope()
     val dataStore = LocalContext.current.dataStore
-    val context = LocalContext.current;
-    LaunchedEffect(null,block = {
-        checkAuth(dataStore){
-            context.startActivity(Intent(context,HomeActivity::class.java))
+    val context = LocalContext.current
+    LaunchedEffect(null, block = {
+        val token = getTokenFromStore(dataStore)
+        if (!token.isNullOrEmpty()) {
+            context.startActivity(Intent(context, HomeActivity::class.java))
         }
-    } )
+    })
     var activeScreen by remember {
         mutableStateOf(ActiveScreen.SIGNUP)
     }
@@ -154,53 +131,6 @@ fun MainScreen() {
     }
 }
 
-
-suspend fun signupreq(context: Context, username: String, password: String): Boolean {
-    @Serializable
-    data class Signupreq(val username: String, val password: String)
-
-    Log.v("TEST", Json.encodeToString(Signupreq(username, password)))
-    try {
-        val res = client.post("http://192.168.1.86:8080/signup") {
-            setAttributes {
-                contentType(ContentType.Application.Json)
-            }
-            setBody(
-                Json.encodeToString(Signupreq(username, password))
-            )
-        }
-        if (
-            res.status == HttpStatusCode.OK
-        ) {
-            val text = res.body<String>()
-            if (text == "Success") {
-                return true
-            }
-        }
-    } catch (e: IOException) {
-        e.message?.let { Log.e("ERR", it) }
-        Toast.makeText(context, "Error Occured", Toast.LENGTH_SHORT).show()
-        return false
-    } catch (err: Exception) {
-        err.message?.let { Log.e("Err", it) }
-        Toast.makeText(context, err.message, Toast.LENGTH_SHORT).show()
-        return false
-    }
-    return false
-}
-
-@Preview
-@Composable
-fun signupPreview() {
-    Signup(setActiveScreen = {})
-}
-
-@Preview
-@Composable
-fun loginPreview() {
-    Login(setActiveScreen = {})
-}
-
 @Composable
 fun Signup(setActiveScreen: (ActiveScreen) -> Unit) {
     val scope = rememberCoroutineScope()
@@ -217,22 +147,33 @@ fun Signup(setActiveScreen: (ActiveScreen) -> Unit) {
     var buttonFocused by remember {
         mutableStateOf(false)
     }
-    var signuploading by remember {
-        mutableStateOf(false)
-    }
 
-    val focusManager = LocalFocusManager.current
-
-    fun handleSignup() {
-        signuploading = true;
-        scope.launch {
-            val success = signupreq(context, username, password)
-            signuploading = false
-            if (success) {
-                setActiveScreen(ActiveScreen.LOGIN)
-            }
+    val signupRequester = Request(
+        onSuccess = {
+            setActiveScreen(ActiveScreen.LOGIN)
+        },
+        onFailure = { e ->
+            e.message?.let { Log.e("ERR", it) }
+            Toast.makeText(context, "Error Occurred", Toast.LENGTH_SHORT).show()
         }
+    ) {
+        @Serializable
+        data class SignupReq(val username: String, val password: String)
+
+        val res = client.post("$server/signup") {
+            setAttributes {
+                contentType(ContentType.Application.Json)
+            }
+            setBody(SignupReq(username, password))
+        }
+        if (res.status != HttpStatusCode.OK) {
+            res.body<Response<String>>()
+        } else {
+            ""
+        }
+
     }
+
 
     Column(
         Modifier
@@ -262,27 +203,27 @@ fun Signup(setActiveScreen: (ActiveScreen) -> Unit) {
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             modifier = Modifier.focusRequester(focusRequester),
             keyboardActions = KeyboardActions(onDone = {
-                if (!signuploading) {
-                    handleSignup()
+                scope.launch {
+                    signupRequester.execute()
                 }
             }),
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(mask = '*'),
-            label = { Text("Username") }
+            label = { Text("Password") }
         )
         Spacer(modifier = Modifier.height(20.dp))
 
         Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
             Button(onClick = {
-                if (!signuploading) {
-                    handleSignup()
+                scope.launch {
+                    signupRequester.execute()
                 }
             },
                 modifier = Modifier
                     .onFocusChanged { buttonFocused = it.isFocused }
             ) {
                 Text(
-                    text = if (signuploading) {
+                    text = if (signupRequester.state == RequstState.LOADING) {
                         "Loading"
                     } else {
                         "Sign Up"
@@ -309,41 +250,11 @@ fun Signup(setActiveScreen: (ActiveScreen) -> Unit) {
 }
 
 
-suspend fun loginReq(context: Context, username: String, password: String):Boolean {
-    @Serializable
-    data class LoginReq(val username: String, val password: String)
-    try {
-        val res = client.post("http://192.168.1.86:8080/login") {
-            setAttributes {
-                contentType(ContentType.Application.Json)
-            }
-            setBody(
-                Json.encodeToString(LoginReq(username, password))
-            )
-        }
-        if(res.status == HttpStatusCode.OK){
-            if(res.body<String>() == "Success"){
-                return true
-            }
-        }
-    } catch (e: IOException) {
-        e.message?.let {
-            Log.e("ERR", it)
-        }
-        Toast.makeText(context, "Error Occured", Toast.LENGTH_SHORT).show()
-    } catch (err: Exception) {
-        err.message?.let { Log.e("ERR", it) }
-        Toast.makeText(context, err.message, Toast.LENGTH_SHORT).show()
-    }
-    return false
-}
-
-
-//@Preview
 @Composable
 fun Login(setActiveScreen: (ActiveScreen) -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val dataStore = context.dataStore
     var username by remember {
         mutableStateOf("")
     }
@@ -356,29 +267,36 @@ fun Login(setActiveScreen: (ActiveScreen) -> Unit) {
     var buttonFocused by remember {
         mutableStateOf(false)
     }
-    var loginLoading by remember {
-        mutableStateOf(false)
-    }
-    val focusManager = LocalFocusManager.current
 
-    fun handleLogin() {
-        loginLoading = true;
-        scope.launch {
-            val success = loginReq(context, username, password)
-            loginLoading = false
-            if (success) {
-                val dataStore = context.dataStore;
-                dataStore.edit { preferences->
-                    run {
-                        val username_key = stringPreferencesKey("username")
-                        val login_status_key = booleanPreferencesKey("login_status")
-                        preferences[username_key] = username
-                        preferences[login_status_key] = true
-                    }
-                }
+    val loginRequester = Request(onSuccess = { res ->
+        if (res.success) {
+            dataStore.edit {
+                val tokenKey = stringPreferencesKey("token")
+                val usernameKey = stringPreferencesKey("username")
+                it[usernameKey] = username
+                it[tokenKey] = res.data
             }
+            context.startActivity(Intent(context, HomeActivity::class.java))
         }
+
+    }, onFailure = { err ->
+        err.message?.let { Log.e("ERR", it) }
+        Toast.makeText(context, err.message, Toast.LENGTH_SHORT).show()
+    }) {
+        @Serializable
+        data class LoginRequest(val username: String, val password: String)
+        val res = client.post("$server/login") {
+            setAttributes {
+                contentType(ContentType.Application.Json)
+            }
+            setBody(
+                LoginRequest(username, password)
+            )
+        }
+        val x = res.body<Response<String>>()
+        x
     }
+
 
     Column(
         Modifier
@@ -408,7 +326,7 @@ fun Login(setActiveScreen: (ActiveScreen) -> Unit) {
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             modifier = Modifier.focusRequester(focusRequester),
             keyboardActions = KeyboardActions(onDone = {
-                handleLogin()
+                scope.launch { loginRequester.execute() }
             }),
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(mask = '*'),
@@ -418,7 +336,7 @@ fun Login(setActiveScreen: (ActiveScreen) -> Unit) {
 
         Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
             Button(onClick = {
-                handleLogin()
+                scope.launch { loginRequester.execute() }
             },
                 modifier = Modifier
                     .onFocusChanged { buttonFocused = it.isFocused }
