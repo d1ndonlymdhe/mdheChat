@@ -1,4 +1,4 @@
-package mainApp.screens
+package com.example.mdhechat.mainApp.screens
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,6 +9,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
@@ -17,7 +18,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.mdhechat.client
-import com.example.mdhechat.helpers.PassValue
 import com.example.mdhechat.helpers.Request
 import com.example.mdhechat.helpers.RequstState
 import com.example.mdhechat.helpers.Response
@@ -30,8 +30,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import mainApp.User
-import mainApp.localUserData
+import com.example.mdhechat.mainApp.User
+import com.example.mdhechat.mainApp.localUserData
 
 
 @Serializable
@@ -45,14 +45,15 @@ enum class FriendshipStatus {
 
 @Composable
 fun Profile(user: User) {
-    var friendshipStatus by remember {
+    val (friendshipStatus, setFriendshipStatus) = remember {
         mutableStateOf(FriendshipStatus.NONE)
     }
+
 
     val token = localUserData.current.token
 
     val getUserInfoRequest = Request({
-        friendshipStatus = it.data
+        setFriendshipStatus(it.data)
     }, { err ->
         err.message?.let {
             println(it)
@@ -75,7 +76,8 @@ fun Profile(user: User) {
                 FriendshipStatusButton(
                     token = token,
                     friendId = user.id,
-                    passFriendshipStatus = PassValue(friendshipStatus)
+                    friendshipStatus,
+                    setFriendshipStatus,
                 )
             }
 
@@ -92,41 +94,46 @@ fun Profile(user: User) {
 fun FriendshipStatusButton(
     token: String,
     friendId: String,
-    passFriendshipStatus: PassValue<FriendshipStatus>
+    friendshipStatus: FriendshipStatus,
+    setFriendshipStatus: (FriendshipStatus) -> Unit
 ) {
-    val (friendshipStatus) = passFriendshipStatus
     val sendRequest = requestFactory(
         token,
         friendId,
-        passFriendshipStatus,
+        friendshipStatus,
+        setFriendshipStatus,
         FriendshipStatus.SENT,
         "$server/friendship/send"
     )
     val acceptRequest = requestFactory(
         token,
         friendId,
-        passFriendshipStatus,
+        friendshipStatus,
+        setFriendshipStatus,
         FriendshipStatus.FRIENDS,
         "$server/friendship/accept"
     )
     val rejectRequest = requestFactory(
         token,
         friendId,
-        passFriendshipStatus,
+        friendshipStatus,
+        setFriendshipStatus,
         FriendshipStatus.NONE,
         "$server/friendship/reject"
     )
     val unfriendRequest = requestFactory(
         token,
         friendId,
-        passFriendshipStatus,
+        friendshipStatus,
+        setFriendshipStatus,
         FriendshipStatus.NONE,
         "$server/friendship/remove"
     )
     val cancelRequest = requestFactory(
         token,
         friendId,
-        passFriendshipStatus,
+        friendshipStatus,
+        setFriendshipStatus,
         FriendshipStatus.NONE,
         "$server/friendship/cancel"
     )
@@ -156,11 +163,11 @@ fun FriendshipStatusButton(
 fun requestFactory(
     token: String,
     friendId: String,
-    passFriendshipStatus: PassValue<FriendshipStatus>,
+    friendshipStatus: FriendshipStatus,
+    setFriendshipStatus: (FriendshipStatus) -> Unit,
     expectedStatus: FriendshipStatus,
     reqUrl: String
 ): Request<Response<String>> {
-    val (friendshipStatus, setFriendshipStatus) = passFriendshipStatus
     val request = Request({
         if (it.success) {
             setFriendshipStatus(expectedStatus)

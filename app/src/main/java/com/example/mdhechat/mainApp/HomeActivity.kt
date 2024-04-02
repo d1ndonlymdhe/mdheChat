@@ -1,6 +1,6 @@
 @file:OptIn(ExperimentalMaterial3Api::class)
 
-package mainApp
+package com.example.mdhechat.mainApp
 
 import android.content.res.Configuration
 import android.os.Bundle
@@ -52,7 +52,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.mdhechat.client
 import com.example.mdhechat.dataStore
-import com.example.mdhechat.helpers.PassValue
 import com.example.mdhechat.helpers.Request
 import com.example.mdhechat.helpers.RequstState
 import com.example.mdhechat.helpers.Response
@@ -68,11 +67,11 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.path
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import mainApp.screens.ChatThumbnail
-import mainApp.screens.HomeTab
-import mainApp.screens.Profile
-import mainApp.screens.SearchResult
-import mainApp.screens.SearchResultRenderer
+import com.example.mdhechat.mainApp.screens.ChatThumbnail
+import com.example.mdhechat.mainApp.screens.HomeTab
+import com.example.mdhechat.mainApp.screens.Profile
+import com.example.mdhechat.mainApp.screens.SearchResult
+import com.example.mdhechat.mainApp.screens.SearchResultRenderer
 
 
 data class UserData(val username: String, val token: String)
@@ -124,7 +123,7 @@ fun MainView() {
         token = getTokenFromStore(context.dataStore) ?: ""
     }
 
-    var profileUser by remember {
+    val (profileUser, setProfileUser) = remember {
         mutableStateOf(User("", ""))
     }
 
@@ -143,6 +142,10 @@ fun MainView() {
     var activeScreen by remember {
         mutableStateOf(Tabs.Home)
     }
+
+    val setActiveScreen = { t: Tabs -> activeScreen = t }
+
+//    val setActiveScree2 = { n: Tabs -> activeScreen = n }
     val navController = rememberNavController()
     val scope = rememberCoroutineScope()
 
@@ -175,7 +178,7 @@ fun MainView() {
     NavHost(navController = navController, startDestination = Tabs.Home.toString()) {
         Tabs.entries.forEach { tab ->
             composable(tab.toString()) {
-                activeScreen = tab
+                setActiveScreen(tab)
             }
         }
     }
@@ -242,8 +245,9 @@ fun MainView() {
                             RequstState.SUCCESS -> {
                                 SearchResultRenderer(
                                     results = searchResult,
-                                    passUser = PassValue(profileUser),
-                                    passActiveScreen = PassValue(activeScreen)
+                                    profileUser,
+                                    setProfileUser,
+                                    activeScreen, setActiveScreen
                                 )
                             }
                         }

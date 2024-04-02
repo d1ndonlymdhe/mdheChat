@@ -1,4 +1,4 @@
-package mainApp.screens
+package com.example.mdhechat.mainApp.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource

@@ -1,4 +1,4 @@
-package mainApp.screens
+package com.example.mdhechat.mainApp.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -20,12 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.mdhechat.helpers.PassValue
 import com.example.mdhechat.uiHelpers.Direction
 import com.example.mdhechat.uiHelpers.Spaced
 import kotlinx.serialization.Serializable
-import mainApp.Tabs
-import mainApp.User
+import com.example.mdhechat.mainApp.Tabs
+import com.example.mdhechat.mainApp.User
 
 @Serializable
 
@@ -35,11 +34,11 @@ data class SearchResult(val username: String, val id: String)
 @Composable
 fun SearchResultRenderer(
     results: List<SearchResult>,
-    passUser: PassValue<User>,
-    passActiveScreen: PassValue<Tabs>
+    profileUser: User,
+    setProfileUser: (User) -> Unit,
+    activeScreen: Tabs,
+    setActiveScreen: (Tabs) -> Unit
 ) {
-    val (_, setUser) = passUser
-    val (_, setActiveScreen) = passActiveScreen
     val interactionSource = remember {
         MutableInteractionSource()
     }
@@ -68,7 +67,7 @@ fun SearchResultRenderer(
                 Spacer(modifier = Modifier.width(2.dp))
                 IconButton(onClick = {
                     setActiveScreen(Tabs.Profile)
-                    setUser(User(it.id, it.username))
+                    setProfileUser(User(it.id, it.username))
                 }) {
                     Icon(imageVector = Icons.Filled.Add, contentDescription = "Add Friend")
                 }
