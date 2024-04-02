@@ -68,14 +68,14 @@ import kotlinx.serialization.Serializable
 import mainApp.HomeActivity
 
 var client = HttpClient {
-    expectSuccess = false
+    expectSuccess = true
     install(ContentNegotiation) {
         json()
     }
 }
 
 
-const val server = "http://192.168.1.86:8080"
+const val server = "http://192.168.1.86:8080/api"
 
 enum class ActiveScreen {
     SIGNUP, LOGIN
@@ -285,6 +285,7 @@ fun Login(setActiveScreen: (ActiveScreen) -> Unit) {
     }) {
         @Serializable
         data class LoginRequest(val username: String, val password: String)
+
         val res = client.post("$server/login") {
             setAttributes {
                 contentType(ContentType.Application.Json)

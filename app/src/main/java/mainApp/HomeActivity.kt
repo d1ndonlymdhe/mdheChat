@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.ButtonDefaults
@@ -30,7 +31,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +52,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.mdhechat.client
 import com.example.mdhechat.dataStore
+import com.example.mdhechat.helpers.PassValue
 import com.example.mdhechat.helpers.Request
 import com.example.mdhechat.helpers.RequstState
 import com.example.mdhechat.helpers.Response
@@ -64,13 +68,19 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.path
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import mainApp.tabs.ChatThumbnail
-import mainApp.tabs.HomeTab
-import mainApp.tabs.SearchResult
-import mainApp.tabs.SearchResultRenderer
+import mainApp.screens.ChatThumbnail
+import mainApp.screens.HomeTab
+import mainApp.screens.Profile
+import mainApp.screens.SearchResult
+import mainApp.screens.SearchResultRenderer
 
+
+data class UserData(val username: String, val token: String)
+
+val localUserData = compositionLocalOf { UserData("", "") }
 
 class HomeActivity : ComponentActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -95,6 +105,10 @@ enum class Tabs(val icon: ImageVector, val title: String) {
         Icons.Filled.Notifications,
         "Notifications"
     ),
+    Profile(
+        Icons.Filled.Face,
+        "Profile"
+    )
 }
 
 
@@ -102,12 +116,18 @@ enum class Tabs(val icon: ImageVector, val title: String) {
 @Composable
 fun MainView() {
     val context = LocalContext.current
-    var username: String? = null
-    var token: String? = null
+    var username = ""
+    var token = ""
+    val userData = UserData("", "")
     LaunchedEffect(Unit) {
-        username = getUsernameFromStore(context.dataStore)
-        token = getTokenFromStore(context.dataStore)
+        username = getUsernameFromStore(context.dataStore) ?: ""
+        token = getTokenFromStore(context.dataStore) ?: ""
     }
+
+    var profileUser by remember {
+        mutableStateOf(User("", ""))
+    }
+
     var chatPreviews by remember {
         mutableStateOf(
             listOf(
@@ -138,10 +158,8 @@ fun MainView() {
         mutableStateOf(Request(onFailure = {
             it.message?.let { it1 -> Log.e("SER", it1) }
         }, requester = {
-            val res = client.get(server) {
+            val res = client.get("$server/search") {
                 url {
-                    port = 8080
-                    path("/search")
                     parameter("query", searchUsername)
                 }
             }
@@ -161,76 +179,86 @@ fun MainView() {
             }
         }
     }
-    Scaffold(topBar = {
-        when (activeScreen) {
-            Tabs.Search -> {
-                TopBar {
-                    OutlinedTextField(
-                        value = searchUsername,
-                        onValueChange = { searchUsername = it },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = {
-                            scope.launch {
-                                searchRequest.execute()
-                            }
-                        })
-                    )
-                }
-            }
-
-            else -> {
-                TopBar {
-                    Text(
-                        text = activeScreen.title,
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-    }, bottomBar = {
-        BottomBar(activeScreen = activeScreen, tabChanger = {
-            if (activeScreen != it) {
-                navController.navigate(it.toString()) {
-                    popUpTo(Tabs.Home.toString())
-                }
-
-            }
-        })
-
-    }) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding)) {
+    CompositionLocalProvider(localUserData provides UserData(username, token)) {
+        Scaffold(topBar = {
             when (activeScreen) {
-                Tabs.Home -> {
-                    HomeTab(thumbnails = chatPreviews)
-                }
-
                 Tabs.Search -> {
-                    when (searchRequest.state) {
-                        RequstState.LOADING -> {
-                            Text("Loading")
-                        }
-
-                        RequstState.NONE -> {
-                            Text("Search For Users")
-                        }
-
-                        RequstState.FAILURE -> {
-                            Text("Error Occurred")
-                        }
-
-                        RequstState.SUCCESS -> {
-                            SearchResultRenderer(results = searchResult)
-                        }
+                    TopBar {
+                        OutlinedTextField(
+                            value = searchUsername,
+                            onValueChange = { searchUsername = it },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                            keyboardActions = KeyboardActions(onSearch = {
+                                scope.launch {
+                                    searchRequest.execute()
+                                }
+                            })
+                        )
                     }
                 }
 
-                Tabs.Notifications -> {
-                    Text(text = "Notifications", color = Color.Green)
+                else -> {
+                    TopBar {
+                        Text(
+                            text = activeScreen.title,
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
+        }, bottomBar = {
+            BottomBar(activeScreen = activeScreen, tabChanger = {
+                if (activeScreen != it) {
+                    navController.navigate(it.toString()) {
+                        popUpTo(Tabs.Home.toString())
+                    }
 
+                }
+            })
+
+        }) { innerPadding ->
+            Column(modifier = Modifier.padding(innerPadding)) {
+                when (activeScreen) {
+                    Tabs.Home -> {
+                        HomeTab(thumbnails = chatPreviews)
+                    }
+
+                    Tabs.Search -> {
+                        when (searchRequest.state) {
+                            RequstState.LOADING -> {
+                                Text("Loading")
+                            }
+
+                            RequstState.NONE -> {
+                                Text("Search For Users")
+                            }
+
+                            RequstState.FAILURE -> {
+                                Text("Error Occurred")
+                            }
+
+                            RequstState.SUCCESS -> {
+                                SearchResultRenderer(
+                                    results = searchResult,
+                                    passUser = PassValue(profileUser),
+                                    passActiveScreen = PassValue(activeScreen)
+                                )
+                            }
+                        }
+                    }
+
+                    Tabs.Notifications -> {
+                        Text(text = "Notifications", color = Color.Green)
+                    }
+
+                    Tabs.Profile -> {
+                        Profile(user = profileUser)
+                    }
+                }
+
+            }
         }
     }
 }

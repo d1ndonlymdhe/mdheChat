@@ -1,4 +1,4 @@
-package mainApp.tabs
+package mainApp.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
