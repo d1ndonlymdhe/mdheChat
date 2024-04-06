@@ -2,31 +2,23 @@
 
 package com.example.mdhechat.mainApp
 
-import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -45,7 +37,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -59,20 +50,26 @@ import com.example.mdhechat.helpers.getTokenFromStore
 import com.example.mdhechat.helpers.getUsernameFromStore
 import com.example.mdhechat.server
 import com.example.mdhechat.ui.theme.MdheChatTheme
-import com.example.mdhechat.uiHelpers.TopBar
 import io.ktor.client.call.body
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.path
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import com.example.mdhechat.mainApp.screens.ChatThumbnail
 import com.example.mdhechat.mainApp.screens.HomeTab
-import com.example.mdhechat.mainApp.screens.Profile
 import com.example.mdhechat.mainApp.screens.SearchResult
 import com.example.mdhechat.mainApp.screens.SearchResultRenderer
-
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.Alignment
+import androidx.navigation.NavController
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.compose.currentBackStackEntryAsState
+import com.example.mdhechat.mainApp.screens.ProfileScreen
 
 data class UserData(val username: String, val token: String)
 
@@ -91,43 +88,93 @@ class HomeActivity : ComponentActivity() {
 }
 
 
-enum class Tabs(val icon: ImageVector, val title: String) {
-    Home(
-        Icons.Filled.Home,
-        "Home"
-    ),
-    Search(
-        Icons.Filled.Add,
-        "Add Friends"
-    ),
-    Notifications(
-        Icons.Filled.Notifications,
-        "Notifications"
-    ),
-    Profile(
-        Icons.Filled.Face,
-        "Profile"
-    )
+enum class Screen {
+    Home, Profile
 }
 
 
-@Preview(uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
 fun MainView() {
     val context = LocalContext.current
-    var username = ""
-    var token = ""
-    val userData = UserData("", "")
+
+    var username by remember {
+        mutableStateOf("")
+    }
+    var token by remember {
+        mutableStateOf("")
+    }
+
     LaunchedEffect(Unit) {
         username = getUsernameFromStore(context.dataStore) ?: ""
         token = getTokenFromStore(context.dataStore) ?: ""
     }
 
-    val (profileUser, setProfileUser) = remember {
-        mutableStateOf(User("", ""))
+    val (profileUser,setProfileUser) = remember {
+        mutableStateOf(
+            User("", "")
+        )
     }
 
-    var chatPreviews by remember {
+    val mainNavController = rememberNavController()
+
+    val (currentScreen, setCurrentScreen) = remember {
+        mutableStateOf(Screen.Home)
+    }
+
+    CompositionLocalProvider(localUserData provides UserData(username, token)) {
+
+        NavHost(navController = mainNavController, startDestination = Screen.Home.toString()) {
+            Screen.entries.forEach { screen ->
+                composable(screen.toString()) {
+                    when (screen) {
+                        Screen.Home -> {
+                            HomeScreen(
+                                mainNavController = mainNavController,
+                                screen = screen,
+                                setScreen = setCurrentScreen,
+                                profileUser = profileUser,
+                                setProfileUser = setProfileUser
+                            )
+                        }
+
+                        Screen.Profile -> {
+                            ProfileScreen(user = profileUser)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+}
+
+
+enum class Tabs(val icon: ImageVector, val title: String) {
+    Chats(
+        Icons.Filled.Home, "Chats"
+    ),
+    Search(
+        Icons.Filled.Add, "Add Friends"
+    ),
+    Notifications(
+        Icons.Filled.Notifications, "Notifications"
+    ),
+}
+
+
+@Composable
+fun HomeScreen(
+    mainNavController: NavController,
+    screen: Screen,
+    setScreen: (Screen) -> Unit,
+    profileUser: User,
+    setProfileUser: (User) -> Unit
+) {
+    val username = localUserData.current.username
+    val token = localUserData.current.token
+
+
+    val chatPreviews by remember {
         mutableStateOf(
             listOf(
                 ChatThumbnail("d1ndonlymdhe", "Hello"),
@@ -139,14 +186,11 @@ fun MainView() {
             )
         )
     }
-    var activeScreen by remember {
-        mutableStateOf(Tabs.Home)
+    val (activeTab, setActiveTab) = remember {
+        mutableStateOf(Tabs.Chats)
     }
 
-    val setActiveScreen = { t: Tabs -> activeScreen = t }
-
-//    val setActiveScree2 = { n: Tabs -> activeScreen = n }
-    val navController = rememberNavController()
+    val homeNavController = rememberNavController()
     val scope = rememberCoroutineScope()
 
     var searchUsername by remember {
@@ -175,21 +219,26 @@ fun MainView() {
             searchResult = res.data.filter { it.username != username }
         }))
     }
-    NavHost(navController = navController, startDestination = Tabs.Home.toString()) {
-        Tabs.entries.forEach { tab ->
-            composable(tab.toString()) {
-                setActiveScreen(tab)
-            }
-        }
-    }
-    CompositionLocalProvider(localUserData provides UserData(username, token)) {
-        Scaffold(topBar = {
-            when (activeScreen) {
-                Tabs.Search -> {
-                    TopBar {
-                        OutlinedTextField(
+    Scaffold(topBar = {
+        val navStackEntry by homeNavController.currentBackStackEntryAsState()
+        val currentDestination = navStackEntry?.destination
+        TopAppBar(modifier = Modifier.fillMaxHeight(0.08f),
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer
+            ),
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxHeight()
+                ) {
+                    when (currentDestination?.hierarchy?.first()?.route) {
+                        Tabs.Search.toString() -> OutlinedTextField(
+                            modifier = Modifier
+                                .padding(0.dp, 4.dp)
+                                .fillMaxHeight(),
                             value = searchUsername,
                             onValueChange = { searchUsername = it },
+                            textStyle = MaterialTheme.typography.bodyMedium,
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                             keyboardActions = KeyboardActions(onSearch = {
@@ -198,120 +247,90 @@ fun MainView() {
                                 }
                             })
                         )
-                    }
-                }
 
-                else -> {
-                    TopBar {
-                        Text(
-                            text = activeScreen.title,
-                            style = MaterialTheme.typography.headlineLarge,
-                            fontWeight = FontWeight.Bold
-                        )
+                        else -> currentDestination?.hierarchy?.first()?.route?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
-                }
-            }
-        }, bottomBar = {
-            BottomBar(activeScreen = activeScreen, tabChanger = {
-                if (activeScreen != it) {
-                    navController.navigate(it.toString()) {
-                        popUpTo(Tabs.Home.toString())
-                    }
-
                 }
             })
 
-        }) { innerPadding ->
-            Column(modifier = Modifier.padding(innerPadding)) {
-                when (activeScreen) {
-                    Tabs.Home -> {
-                        HomeTab(thumbnails = chatPreviews)
-                    }
+    }, bottomBar = {
+        NavigationBar(modifier = Modifier.fillMaxHeight(0.08f)) {
+            val navStackEntry by homeNavController.currentBackStackEntryAsState()
+            val currentDestination = navStackEntry?.destination
+            Tabs.entries.forEach { screen ->
+                NavigationBarItem(
+                    selected = currentDestination?.hierarchy?.any { it.route == screen.toString() } == true,
+                    onClick = {
+                        setActiveTab(screen)
+                        homeNavController.navigate(screen.toString()) {
+                            popUpTo(Tabs.Chats.toString())
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                    icon = { Icon(screen.icon, screen.title) },
+                )
 
-                    Tabs.Search -> {
-                        when (searchRequest.state) {
-                            RequstState.LOADING -> {
-                                Text("Loading")
+            }
+        }
+
+
+    }) { innerPadding ->
+        Column(modifier = Modifier.padding(innerPadding)) {
+            NavHost(
+                navController = homeNavController, startDestination = Tabs.Chats.toString()
+            ) {
+                Tabs.entries.forEach { tab ->
+                    composable(tab.toString()) {
+                        when (tab) {
+                            Tabs.Chats -> {
+                                HomeTab(thumbnails = chatPreviews)
                             }
 
-                            RequstState.NONE -> {
-                                Text("Search For Users")
+                            Tabs.Search -> {
+                                when (searchRequest.state) {
+                                    RequstState.LOADING -> {
+                                        Text("Loading")
+                                    }
+
+                                    RequstState.NONE -> {
+                                        Text("Search For Users")
+                                    }
+
+                                    RequstState.FAILURE -> {
+                                        Text("Error Occurred")
+                                    }
+
+                                    RequstState.SUCCESS -> {
+                                        SearchResultRenderer(
+                                            mainNavController = mainNavController,
+                                            results = searchResult,
+                                            profileUser = profileUser,
+                                            setProfileUser = setProfileUser,
+                                            activeScreen = screen,
+                                            setActiveScreen = setScreen
+                                        )
+                                    }
+                                }
                             }
 
-                            RequstState.FAILURE -> {
-                                Text("Error Occurred")
-                            }
-
-                            RequstState.SUCCESS -> {
-                                SearchResultRenderer(
-                                    results = searchResult,
-                                    profileUser,
-                                    setProfileUser,
-                                    activeScreen, setActiveScreen
-                                )
+                            Tabs.Notifications -> {
+                                Text(text = "Notifications", color = Color.Green)
                             }
                         }
                     }
-
-                    Tabs.Notifications -> {
-                        Text(text = "Notifications", color = Color.Green)
-                    }
-
-                    Tabs.Profile -> {
-                        Profile(user = profileUser)
-                    }
                 }
-
             }
         }
-    }
-}
-
-
-@Composable
-fun BottomBar(activeScreen: Tabs, tabChanger: (Tabs) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.secondaryContainer)
-            .padding(10.dp, 4.dp), horizontalArrangement = Arrangement.Center
-    ) {
-
-
-        val defaultModifier = Modifier
-
-        val unSelectedModifier = defaultModifier.then(
-            Modifier
-                .weight(1.0f / Tabs.entries.size)
-                .background(
-                    MaterialTheme.colorScheme.secondaryContainer, ButtonDefaults.outlinedShape
-                )
-        )
-        val selectedModifier = defaultModifier.then(
-            Modifier
-                .weight(1.0f)
-                .background(
-                    MaterialTheme.colorScheme.primaryContainer, ButtonDefaults.outlinedShape
-                )
-        )
-
-        Tabs.entries.forEach {
-            OutlinedButton(
-                onClick = {
-                    tabChanger(it)
-                },
-                modifier = if (activeScreen == it) {
-                    selectedModifier
-                } else {
-                    unSelectedModifier
-                },
-            ) {
-                Icon(imageVector = it.icon, contentDescription = it.name)
-            }
-            Spacer(modifier = Modifier.width(5.dp))
-        }
-
-
     }
 }
 

@@ -20,6 +20,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import com.example.mdhechat.mainApp.Screen
 import com.example.mdhechat.uiHelpers.Direction
 import com.example.mdhechat.uiHelpers.Spaced
 import kotlinx.serialization.Serializable
@@ -33,11 +35,12 @@ data class SearchResult(val username: String, val id: String)
 
 @Composable
 fun SearchResultRenderer(
+    mainNavController: NavController,
     results: List<SearchResult>,
     profileUser: User,
     setProfileUser: (User) -> Unit,
-    activeScreen: Tabs,
-    setActiveScreen: (Tabs) -> Unit
+    activeScreen: Screen,
+    setActiveScreen: (Screen) -> Unit
 ) {
     val interactionSource = remember {
         MutableInteractionSource()
@@ -66,7 +69,12 @@ fun SearchResultRenderer(
                 )
                 Spacer(modifier = Modifier.width(2.dp))
                 IconButton(onClick = {
-                    setActiveScreen(Tabs.Profile)
+                    setActiveScreen(Screen.Profile)
+                    mainNavController.navigate(Screen.Profile.toString()) {
+                        popUpTo(Screen.Home.toString()) {
+                            saveState = true
+                        }
+                    }
                     setProfileUser(User(it.id, it.username))
                 }) {
                     Icon(imageVector = Icons.Filled.Add, contentDescription = "Add Friend")

@@ -1,5 +1,7 @@
 package com.example.mdhechat.mainApp.screens
 
+import android.content.res.Configuration
+import android.util.Log
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,19 +11,17 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.mdhechat.client
 import com.example.mdhechat.helpers.Request
 import com.example.mdhechat.helpers.RequstState
 import com.example.mdhechat.helpers.Response
-import com.example.mdhechat.helpers.TokenizedRequest
+import com.example.mdhechat.helpers.TokenedRequest
 import com.example.mdhechat.server
 import io.ktor.client.call.body
 import io.ktor.client.request.post
@@ -32,6 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import com.example.mdhechat.mainApp.User
 import com.example.mdhechat.mainApp.localUserData
+import com.example.mdhechat.ui.theme.MdheChatTheme
 
 
 @Serializable
@@ -43,34 +44,47 @@ enum class FriendshipStatus {
 }
 
 
+@Preview(showSystemUi = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
-fun Profile(user: User) {
+fun ProfilePreview() {
+    MdheChatTheme {
+        ProfileScreen(user = User("", "Hari Bahadur"))
+    }
+}
+
+
+@Composable
+fun ProfileScreen(user: User) {
     val (friendshipStatus, setFriendshipStatus) = remember {
         mutableStateOf(FriendshipStatus.NONE)
     }
-
-
     val token = localUserData.current.token
-
-    val getUserInfoRequest = Request({
-        setFriendshipStatus(it.data)
-    }, { err ->
-        err.message?.let {
-            println(it)
+    val getUserInfoRequest = remember {
+        Request({
+            setFriendshipStatus(it.data)
+        }, { err ->
+            err.message?.let {
+                Log.v("ERR", it)
+//            println(it)
+            }
+        }) {
+            val res = client.post("$server/friendship") {
+                contentType(ContentType.Application.Json)
+                setBody(TokenedRequest(token, user.id))
+            }
+            res.body<Response<FriendshipStatus>>()
         }
-    }) {
-        val res = client.post("$server/relation") {
-            contentType(ContentType.Application.Json)
-            setBody(TokenizedRequest(token, user.id))
-        }
-        res.body<Response<FriendshipStatus>>()
     }
+
     LaunchedEffect(key1 = null) {
+        Log.v("INF", "Executing")
         getUserInfoRequest.execute()
     }
+
     Column {
         Text(text = user.username)
         Spacer(modifier = Modifier.height(5.dp))
+
         when (getUserInfoRequest.state) {
             RequstState.SUCCESS -> {
                 FriendshipStatusButton(
@@ -82,7 +96,10 @@ fun Profile(user: User) {
             }
 
             else -> {
-                getUserInfoRequest.state.toString()
+
+                Text(
+                    text = getUserInfoRequest.state.toString()
+                )
             }
         }
 
@@ -97,46 +114,56 @@ fun FriendshipStatusButton(
     friendshipStatus: FriendshipStatus,
     setFriendshipStatus: (FriendshipStatus) -> Unit
 ) {
-    val sendRequest = requestFactory(
-        token,
-        friendId,
-        friendshipStatus,
-        setFriendshipStatus,
-        FriendshipStatus.SENT,
-        "$server/friendship/send"
-    )
-    val acceptRequest = requestFactory(
-        token,
-        friendId,
-        friendshipStatus,
-        setFriendshipStatus,
-        FriendshipStatus.FRIENDS,
-        "$server/friendship/accept"
-    )
-    val rejectRequest = requestFactory(
-        token,
-        friendId,
-        friendshipStatus,
-        setFriendshipStatus,
-        FriendshipStatus.NONE,
-        "$server/friendship/reject"
-    )
-    val unfriendRequest = requestFactory(
-        token,
-        friendId,
-        friendshipStatus,
-        setFriendshipStatus,
-        FriendshipStatus.NONE,
-        "$server/friendship/remove"
-    )
-    val cancelRequest = requestFactory(
-        token,
-        friendId,
-        friendshipStatus,
-        setFriendshipStatus,
-        FriendshipStatus.NONE,
-        "$server/friendship/cancel"
-    )
+    val sendRequest = remember {
+        requestFactory(
+            token,
+            friendId,
+            friendshipStatus,
+            setFriendshipStatus,
+            FriendshipStatus.SENT,
+            "$server/friendship/send"
+        )
+    }
+    val acceptRequest = remember {
+        requestFactory(
+            token,
+            friendId,
+            friendshipStatus,
+            setFriendshipStatus,
+            FriendshipStatus.FRIENDS,
+            "$server/friendship/accept"
+        )
+    }
+    val rejectRequest = remember {
+        requestFactory(
+            token,
+            friendId,
+            friendshipStatus,
+            setFriendshipStatus,
+            FriendshipStatus.NONE,
+            "$server/friendship/reject"
+        )
+    }
+    val unfriendRequest = remember {
+        requestFactory(
+            token,
+            friendId,
+            friendshipStatus,
+            setFriendshipStatus,
+            FriendshipStatus.NONE,
+            "$server/friendship/delete"
+        )
+    }
+    val cancelRequest = remember {
+        requestFactory(
+            token,
+            friendId,
+            friendshipStatus,
+            setFriendshipStatus,
+            FriendshipStatus.NONE,
+            "$server/friendship/cancel"
+        )
+    }
     Row {
         when (friendshipStatus) {
             FriendshipStatus.NONE -> {
@@ -181,8 +208,9 @@ fun requestFactory(
             setAttributes {
                 contentType(ContentType.Application.Json)
             }
-            setBody(TokenizedRequest(token, friendId))
+            setBody(TokenedRequest(token, friendId))
         }
+        Log.v("STA", res.status.toString())
         res.body<Response<String>>()
     }
     return request
