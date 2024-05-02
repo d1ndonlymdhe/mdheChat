@@ -76,10 +76,10 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:$nav_version")
 
     implementation("io.ktor:ktor-client-core:2.3.8")
-    implementation("io.ktor:ktor-client-android:2.3.8")
+    implementation("io.ktor:ktor-client-okhttp:2.3.8")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.8")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.8")
-
+    implementation("io.ktor:ktor-client-websockets:2.3.8")
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 
 

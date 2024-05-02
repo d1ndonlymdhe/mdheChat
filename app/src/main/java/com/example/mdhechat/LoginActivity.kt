@@ -66,16 +66,20 @@ import io.ktor.serialization.kotlinx.json.*;
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import com.example.mdhechat.mainApp.HomeActivity
+import io.ktor.client.plugins.websocket.WebSockets
 
 var client = HttpClient {
     expectSuccess = true
     install(ContentNegotiation) {
         json()
     }
+    install(WebSockets)
 }
 
 
-const val server = "http://192.168.1.86:8080/api"
+const val serverAddr = "192.168.1.86:8080/api"
+const val server = "http://$serverAddr"
+const val notificationServer = "ws://$serverAddr/ws/notification"
 
 enum class ActiveScreen {
     SIGNUP, LOGIN

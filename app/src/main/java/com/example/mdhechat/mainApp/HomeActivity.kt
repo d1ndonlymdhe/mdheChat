@@ -32,7 +32,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -68,8 +67,26 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.ui.Alignment
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavType
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.navArgument
+import com.example.mdhechat.helpers.TokenedRequest
+import com.example.mdhechat.helpers.WSMessage
+import com.example.mdhechat.helpers.getWSData
+import com.example.mdhechat.helpers.getWSEvent
+import com.example.mdhechat.helpers.mergeList
+import com.example.mdhechat.mainApp.screens.NotificationScreen
 import com.example.mdhechat.mainApp.screens.ProfileScreen
+import com.example.mdhechat.notificationServer
+import io.ktor.client.plugins.websocket.webSocket
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
+import io.ktor.websocket.Frame
+import io.ktor.websocket.readText
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 data class UserData(val username: String, val token: String)
 
@@ -93,6 +110,39 @@ enum class Screen {
 }
 
 
+@Serializable
+enum class FriendshipType {
+    OTHER,
+    SEND,
+    ACCEPT
+}
+
+@Serializable
+data class FriendshipNotification(
+    val friendshipType: FriendshipType,
+    val relatedUserId: String,
+    val relatedUserName: String
+)
+
+@Serializable
+data class NotificationMap(val friendshipNotificationList: List<FriendshipNotification>)
+
+
+fun mergeNotificationMap(
+    notificationMap: NotificationMap,
+    notificationMap2: NotificationMap
+): NotificationMap {
+
+    val nm = NotificationMap(
+        mergeList(
+            notificationMap.friendshipNotificationList,
+            notificationMap2.friendshipNotificationList
+        )
+    )
+    return nm
+}
+
+
 @Composable
 fun MainView() {
     val context = LocalContext.current
@@ -104,12 +154,70 @@ fun MainView() {
         mutableStateOf("")
     }
 
+    var notifications by remember {
+        mutableStateOf<NotificationMap?>(null)
+    }
+    val setNotifications = { n: NotificationMap ->
+        notifications = n
+    }
+
+    val initialNotificationRequest = Request<Response<NotificationMap>>({ response ->
+        setNotifications(
+            mergeNotificationMap(notifications ?: NotificationMap(listOf()), response.data)
+        )
+    }, { failure ->
+        failure.let { failure.message?.let { it1 -> Log.e("NOT", it1) } }
+    }) {
+        val res = client.post("${server}/notifications") {
+            contentType(ContentType.Application.Json)
+            setBody(TokenedRequest(token = token, data = ""))
+        }
+        res.body()
+    }
+
+
+
     LaunchedEffect(Unit) {
         username = getUsernameFromStore(context.dataStore) ?: ""
         token = getTokenFromStore(context.dataStore) ?: ""
+
+        initialNotificationRequest.execute()
+
+        client.webSocket(notificationServer) {
+            while (true) {
+                val x = incoming.receive() as Frame.Text
+                val data = x.readText();
+                Log.v("ws", "Raw = ${x.readText()}")
+                val event = getWSEvent(data)
+                Log.v("ws", "Event = $event")
+                when (event) {
+                    "validate" -> {
+                        send(Frame.Text(Json.encodeToString(WSMessage("validate", token))))
+                    }
+
+                    "notification" -> {
+                        val data2 = getWSData<NotificationMap>(data)
+                        setNotifications(
+                            mergeNotificationMap(
+                                notifications ?: NotificationMap(
+                                    listOf()
+                                ), data2
+                            )
+                        )
+                        Log.v("ws", data2.toString())
+                    }
+
+                    else -> {
+//                        val wsData = getWSData(data)
+//                        Log.v("ws", wsData.toString())
+                    }
+                }
+            }
+
+        }
     }
 
-    val (profileUser,setProfileUser) = remember {
+    val (profileUser, setProfileUser) = remember {
         mutableStateOf(
             User("", "")
         )
@@ -124,6 +232,7 @@ fun MainView() {
     CompositionLocalProvider(localUserData provides UserData(username, token)) {
 
         NavHost(navController = mainNavController, startDestination = Screen.Home.toString()) {
+
             Screen.entries.forEach { screen ->
                 composable(screen.toString()) {
                     when (screen) {
@@ -133,7 +242,9 @@ fun MainView() {
                                 screen = screen,
                                 setScreen = setCurrentScreen,
                                 profileUser = profileUser,
-                                setProfileUser = setProfileUser
+                                setProfileUser = setProfileUser,
+                                notificationMap = notifications ?: NotificationMap(listOf()),
+                                setNotificationMap = setNotifications
                             )
                         }
 
@@ -168,7 +279,9 @@ fun HomeScreen(
     screen: Screen,
     setScreen: (Screen) -> Unit,
     profileUser: User,
-    setProfileUser: (User) -> Unit
+    setProfileUser: (User) -> Unit,
+    notificationMap: NotificationMap,
+    setNotificationMap: (NotificationMap) -> Unit
 ) {
     val username = localUserData.current.username
     val token = localUserData.current.token
@@ -248,6 +361,7 @@ fun HomeScreen(
                             })
                         )
 
+
                         else -> currentDestination?.hierarchy?.first()?.route?.let {
                             Text(
                                 text = it,
@@ -323,9 +437,10 @@ fun HomeScreen(
                                 }
                             }
 
-                            Tabs.Notifications -> {
-                                Text(text = "Notifications", color = Color.Green)
-                            }
+                            Tabs.Notifications -> NotificationScreen(
+                                notificationMap = notificationMap,
+                                setNotificationMap = setNotificationMap
+                            )
                         }
                     }
                 }
